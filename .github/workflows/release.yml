@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "custom_components/ezviz_push/manifest.json"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Detect version change
+        id: check
+        run: |
+          MANIFEST="custom_components/ezviz_push/manifest.json"
+          NEW_VERSION=$(jq -r '.version' "$MANIFEST")
+          OLD_VERSION=$(git show "HEAD~1:$MANIFEST" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
+          if [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$OLD_VERSION" ]; then
+            echo "version_changed=true" >> "$GITHUB_OUTPUT"
+            echo "🎉 Version bumped: $OLD_VERSION -> $NEW_VERSION"
+          else
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️  Version unchanged ($NEW_VERSION), skipping release."
+          fi
+
+      - name: Check if tag already exists
+        id: tag
+        if: steps.check.outputs.version_changed == 'true'
+        run: |
+          if git rev-parse -q --verify "refs/tags/v${{ steps.check.outputs.new_version }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "ℹ️  Tag v${{ steps.check.outputs.new_version }} already exists, skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate AI bilingual changelog
+        id: changelog
+        if: steps.check.outputs.version_changed == 'true' && steps.tag.outputs.exists != 'true'
+        uses: Desmond-Dong/actions/bilingual-changelog@main
+        with:
+          llm-api-key: ${{ secrets.LLM_API_KEY }}
+          llm-api-url: ${{ secrets.LLM_API_URL }}
+          llm-model: ${{ secrets.LLM_MODEL }}
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.version_changed == 'true' && steps.tag.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.check.outputs.new_version }}
+          name: v${{ steps.check.outputs.new_version }}
+          body: ${{ steps.changelog.outputs.changelog }}
