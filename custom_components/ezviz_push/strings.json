@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EZVIZ Cloud Push",
+        "description": "Configure the EZVIZ Cloud Push integration.\n\nSet up a webhook ID. After setup, configure this URL in EZVIZ cloud:\n\n`{webhook_url}`",
+        "data": {
+          "webhook_id": "Webhook ID"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one instance is allowed."
+    }
+  }
+}
