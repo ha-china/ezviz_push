@@ -6,7 +6,7 @@ from homeassistant.components.webhook import async_register, async_unregister
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers import config_validation as cv
 
 from .const import CONF_WEBHOOK_ID, DEFAULT_WEBHOOK_ID, DOMAIN
 from .device_manager import DeviceManager
@@ -17,9 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CAMERA]
 
-
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    return True
+CONFIG_SCHEMA = cv.config_entry_only_config_schema
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
