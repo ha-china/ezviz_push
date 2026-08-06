@@ -142,9 +142,16 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
 async def handle_webhook(hass: HomeAssistant, webhook_id: str, request: web.Request) -> web.Response:
     try:
         body = await request.text()
+    except Exception as err:
+        _LOGGER.warning("Failed to read webhook body: %s", err)
+        return web.json_response({"error": "read error"}, status=400)
+
+    _LOGGER.debug("Webhook raw payload: %s", body)
+
+    try:
         data = json.loads(body)
-    except (json.JSONDecodeError, Exception) as err:
-        _LOGGER.warning("Invalid webhook payload: %s", err)
+    except (json.JSONDecodeError, ValueError) as err:
+        _LOGGER.warning("Invalid webhook payload: %s | raw=%s", err, body)
         return web.json_response({"error": "invalid json"}, status=400)
 
     header = data.get("header", {})

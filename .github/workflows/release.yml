@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -55,10 +55,19 @@ jobs:
           llm-api-url: ${{ secrets.LLM_API_URL }}
           llm-model: ${{ secrets.LLM_MODEL }}
 
+      - name: Package integration zip
+        if: steps.check.outputs.version_changed == 'true' && steps.tag.outputs.exists != 'true'
+        run: |
+          cd ${{ github.workspace }}/custom_components/ezviz_push
+          zip -r ezviz_push.zip ./
+          echo "Packaged contents:"
+          unzip -l ezviz_push.zip
+
       - name: Create GitHub Release
         if: steps.check.outputs.version_changed == 'true' && steps.tag.outputs.exists != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.check.outputs.new_version }}
           name: v${{ steps.check.outputs.new_version }}
           body: ${{ steps.changelog.outputs.changelog }}
+          files: custom_components/ezviz_push/ezviz_push.zip

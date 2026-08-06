@@ -1,5 +1,7 @@
 {
   "name": "EZVIZ Cloud Push",
   "homeassistant": "2024.1.0",
-  "country": ["CN"]
+  "country": ["CN"],
+  "zip_release": true,
+  "filename": "ezviz_push.zip"
 }
