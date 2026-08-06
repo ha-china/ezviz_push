@@ -7,11 +7,14 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   hassfest:
     runs-on: "ubuntu-latest"
     steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
       - name: Hassfest validation
         uses: "home-assistant/actions/hassfest@master"
