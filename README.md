@@ -47,6 +47,9 @@
 3. URL 填写：`https://你的HA公网地址/api/webhook/ezviz-push-webhook`
 4. 保存后，萤石云会自动推送门铃/猫眼事件到 HA
 
+![萤石云后台配置](ezviz.png)
+
+
 ## 实体列表
 
 每个设备会创建以下实体：
