@@ -25,11 +25,11 @@ async def async_setup_entry(
     @callback
     def _device_added(device_id: str) -> None:
         entities = [
-            EZVIZOnlineBinarySensor(device_id),
-            EZVIZDoorbellRingBinarySensor(device_id),
-            EZVIZAlarmBinarySensor(device_id),
-            EZVIZArmedBinarySensor(device_id),
-            EZVIZDetectionBinarySensor(device_id),
+            EZVIZOnlineBinarySensor(device_id, device_manager),
+            EZVIZDoorbellRingBinarySensor(device_id, device_manager),
+            EZVIZAlarmBinarySensor(device_id, device_manager),
+            EZVIZArmedBinarySensor(device_id, device_manager),
+            EZVIZDetectionBinarySensor(device_id, device_manager),
         ]
         async_add_entities(entities)
 
@@ -44,8 +44,11 @@ async def async_setup_entry(
 class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
     _attr_should_poll = False
 
-    def _init(self, device_id: str, key: str, name: str, device_class=None) -> None:
+    def _init(
+        self, device_id: str, key: str, name: str, device_manager, device_class=None
+    ) -> None:
         self._device_id = device_id
+        self._device_manager = device_manager
         self._key = key
         self._attr_unique_id = f"{device_id}_{key}"
         self._attr_name = name
@@ -55,11 +58,18 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
+        device = self._device_manager.get_device(self._device_id)
+        name = (
+            device.friendly_name
+            if device and device.friendly_name
+            else f"EZVIZ {self._device_id[:8]}"
+        )
+        model = device.device_type if device and device.device_type else DEVICE_MODEL
         return DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=f"EZVIZ {self._device_id[:8]}",
+            name=name,
             manufacturer=MANUFACTURER,
-            model=DEVICE_MODEL,
+            model=model,
         )
 
     async def async_added_to_hass(self) -> None:
@@ -81,21 +91,22 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
 
 
 class EZVIZOnlineBinarySensor(_EZVIZBinarySensor):
-    def __init__(self, device_id: str) -> None:
-        self._init(device_id, "online", "Online", BinarySensorDeviceClass.CONNECTIVITY)
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "online", "Online", device_manager, BinarySensorDeviceClass.CONNECTIVITY)
         self._attr_available = True
         self._attr_is_on = True
 
     @callback
     def _handle_data(self, data: dict) -> None:
-        self._attr_is_on = True
-        self._attr_available = True
-        self.async_write_ha_state()
+        if "online" in data:
+            self._attr_is_on = bool(data["online"])
+            self._attr_available = True
+            self.async_write_ha_state()
 
 
 class EZVIZDoorbellRingBinarySensor(_EZVIZBinarySensor):
-    def __init__(self, device_id: str) -> None:
-        self._init(device_id, "doorbell_ring", "Doorbell Ring", BinarySensorDeviceClass.OCCUPANCY)
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "doorbell_ring", "Doorbell Ring", device_manager, BinarySensorDeviceClass.OCCUPANCY)
         self._attr_available = True
 
     @callback
@@ -113,8 +124,8 @@ class EZVIZDoorbellRingBinarySensor(_EZVIZBinarySensor):
 
 
 class EZVIZAlarmBinarySensor(_EZVIZBinarySensor):
-    def __init__(self, device_id: str) -> None:
-        self._init(device_id, "alarm", "Alarm", BinarySensorDeviceClass.SAFETY)
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "alarm", "Alarm", device_manager, BinarySensorDeviceClass.SAFETY)
         self._attr_available = True
 
     @callback
@@ -134,8 +145,8 @@ class EZVIZAlarmBinarySensor(_EZVIZBinarySensor):
 class EZVIZArmedBinarySensor(_EZVIZBinarySensor):
     """布防状态 (status: 1=armed, 0=disarmed)"""
 
-    def __init__(self, device_id: str) -> None:
-        self._init(device_id, "armed", "Armed", BinarySensorDeviceClass.LOCK)
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "armed", "Armed", device_manager, BinarySensorDeviceClass.LOCK)
 
     @callback
     def _handle_data(self, data: dict) -> None:
@@ -148,8 +159,8 @@ class EZVIZArmedBinarySensor(_EZVIZBinarySensor):
 class EZVIZDetectionBinarySensor(_EZVIZBinarySensor):
     """检测开关 (Enable: 1=on, 0=off)"""
 
-    def __init__(self, device_id: str) -> None:
-        self._init(device_id, "detection_enabled", "Detection Enabled", BinarySensorDeviceClass.RUNNING)
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "detection_enabled", "Detection Enabled", device_manager, BinarySensorDeviceClass.RUNNING)
 
     @callback
     def _handle_data(self, data: dict) -> None:

@@ -103,7 +103,7 @@ async def async_setup_entry(
     @callback
     def _device_added(device_id: str) -> None:
         sensors = [
-            EZVIZSensor(device_id, sensor_key, sensor_config)
+            EZVIZSensor(device_id, sensor_key, sensor_config, device_manager)
             for sensor_key, sensor_config in SENSOR_TYPES.items()
         ]
         async_add_entities(sensors)
@@ -117,8 +117,9 @@ async def async_setup_entry(
 
 
 class EZVIZSensor(RestoreEntity, SensorEntity):
-    def __init__(self, device_id: str, sensor_key: str, sensor_config: dict) -> None:
+    def __init__(self, device_id: str, sensor_key: str, sensor_config: dict, device_manager) -> None:
         self._device_id = device_id
+        self._device_manager = device_manager
         self._sensor_key = sensor_key
         self._config = sensor_config
         self._attr_unique_id = f"{device_id}_{sensor_key}"
@@ -133,11 +134,18 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
+        device = self._device_manager.get_device(self._device_id)
+        name = (
+            device.friendly_name
+            if device and device.friendly_name
+            else f"EZVIZ {self._device_id[:8]}"
+        )
+        model = device.device_type if device and device.device_type else DEVICE_MODEL
         return DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=f"EZVIZ {self._device_id[:8]}",
+            name=name,
             manufacturer=MANUFACTURER,
-            model=DEVICE_MODEL,
+            model=model,
         )
 
     async def async_added_to_hass(self) -> None:

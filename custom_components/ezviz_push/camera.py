@@ -39,8 +39,8 @@ async def async_setup_entry(
     @callback
     def _device_added(device_id: str) -> None:
         entities = [
-            EZVIZCamera(hass, device_id, "alarm_picture", "Alarm Picture", "alarm_picture_url", image_handler),
-            EZVIZCamera(hass, device_id, "calling_picture", "Calling Picture", "calling_picture_url", image_handler),
+            EZVIZCamera(hass, device_id, "alarm_picture", "Alarm Picture", "alarm_picture_url", image_handler, device_manager),
+            EZVIZCamera(hass, device_id, "calling_picture", "Calling Picture", "calling_picture_url", image_handler, device_manager),
         ]
         async_add_entities(entities)
 
@@ -61,10 +61,12 @@ class EZVIZCamera(Camera):
         name: str,
         url_key: str,
         image_handler: ImageHandler,
+        device_manager,
     ) -> None:
         super().__init__()
         self._hass = hass
         self._device_id = device_id
+        self._device_manager = device_manager
         self._camera_key = camera_key
         self._url_key = url_key
         self._image_handler = image_handler
@@ -77,11 +79,18 @@ class EZVIZCamera(Camera):
 
     @property
     def device_info(self) -> DeviceInfo:
+        device = self._device_manager.get_device(self._device_id)
+        name = (
+            device.friendly_name
+            if device and device.friendly_name
+            else f"EZVIZ {self._device_id[:8]}"
+        )
+        model = device.device_type if device and device.device_type else DEVICE_MODEL
         return DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=f"EZVIZ {self._device_id[:8]}",
+            name=name,
             manufacturer=MANUFACTURER,
-            model=DEVICE_MODEL,
+            model=model,
         )
 
     async def async_added_to_hass(self) -> None:

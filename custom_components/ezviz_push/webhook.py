@@ -15,6 +15,7 @@ from .const import (
     MSG_TYPE_ALARM,
     MSG_TYPE_CALLING,
     MSG_TYPE_DEVICE_STATUS,
+    MSG_TYPE_ONOFFLINE,
     MSG_TYPE_SHADOW_CHANGE,
 )
 from .device_manager import DeviceManager
@@ -133,6 +134,13 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
             extracted["calling_picture_url"] = url
             _LOGGER.debug("Calling picture URL: %s", url)
 
+    elif message_type == MSG_TYPE_ONOFFLINE:
+        # ys.onoffline - device online/offline event
+        msg_type = str(body.get("msgType", "")).upper()
+        extracted["online"] = msg_type == "ONLINE"
+        extracted["device_name"] = body.get("deviceName")
+        extracted["device_type"] = body.get("devType")
+
     else:
         _LOGGER.debug("Unhandled message type: %s", message_type)
 
@@ -178,10 +186,15 @@ async def handle_webhook(hass: HomeAssistant, webhook_id: str, request: web.Requ
 
     extracted = extract_data(message_type, body_data)
 
-    # Update device friendly name from channel name
-    channel_name = extracted.get("channel_name")
-    if channel_name:
-        await device_manager.async_update_device_name(device_id, channel_name)
+    # Update device friendly name from device/channel name
+    new_name = extracted.get("device_name") or extracted.get("channel_name")
+    if new_name:
+        await device_manager.async_update_device_name(device_id, new_name)
+
+    # Update device model from devType
+    device_type = extracted.get("device_type")
+    if device_type:
+        await device_manager.async_update_device_model(device_id, device_type)
 
     extracted["_message_type"] = message_type
     extracted["_timestamp"] = datetime.now().isoformat()

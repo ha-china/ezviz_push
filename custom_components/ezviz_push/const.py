@@ -9,6 +9,7 @@ MSG_TYPE_DEVICE_STATUS = "ys.devicestatus"
 MSG_TYPE_SHADOW_CHANGE = "ys.shadow.change"
 MSG_TYPE_ALARM = "ys.alarm"
 MSG_TYPE_CALLING = "ys.calling"
+MSG_TYPE_ONOFFLINE = "ys.onoffline"
 
 # Device info
 DEVICE_MODEL = "Doorbell"

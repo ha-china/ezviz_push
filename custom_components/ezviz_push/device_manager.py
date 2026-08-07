@@ -17,6 +17,7 @@ class DeviceInfo:
     last_seen: str
     message_count: int = 0
     friendly_name: str = ""
+    device_type: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -25,6 +26,7 @@ class DeviceInfo:
             "last_seen": self.last_seen,
             "message_count": self.message_count,
             "friendly_name": self.friendly_name,
+            "device_type": self.device_type,
         }
 
     @classmethod
@@ -76,6 +78,12 @@ class DeviceManager:
         device = self._devices.get(device_id)
         if device and name and device.friendly_name != name:
             device.friendly_name = name
+            await self.async_save()
+
+    async def async_update_device_model(self, device_id: str, model: str) -> None:
+        device = self._devices.get(device_id)
+        if device and model and device.device_type != model:
+            device.device_type = model
             await self.async_save()
 
     def get_device(self, device_id: str) -> Optional[DeviceInfo]:
