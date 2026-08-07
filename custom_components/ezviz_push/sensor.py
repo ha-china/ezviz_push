@@ -69,6 +69,20 @@ SENSOR_TYPES = {
         "state_class": None,
         "unit": None,
     },
+    "calling_action": {
+        "name": "Calling Action",
+        "icon": "mdi:phone-ring",
+        "device_class": None,
+        "state_class": None,
+        "unit": None,
+    },
+    "face_id": {
+        "name": "Face ID",
+        "icon": "mdi:face-recognition",
+        "device_class": None,
+        "state_class": None,
+        "unit": None,
+    },
     "alarm_type": {
         "name": "Alarm Type",
         "icon": "mdi:alarm-panel",

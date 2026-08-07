@@ -49,7 +49,10 @@ class ImageHandler:
 
                 async with self._session.get(url, headers=headers, allow_redirects=True) as resp:
                     if resp.status != 200:
-                        _LOGGER.warning("HTTP %s for image", resp.status)
+                        if attempt == 1:
+                            _LOGGER.warning("HTTP %s for image", resp.status)
+                        else:
+                            _LOGGER.debug("HTTP %s for image (attempt %d)", resp.status, attempt + 1)
                         if attempt == 0:
                             await asyncio.sleep(1)
                             continue
@@ -67,7 +70,10 @@ class ImageHandler:
                     return encoded
 
             except Exception as err:
-                _LOGGER.warning("Fetch error (attempt %d): %s", attempt + 1, err)
+                if attempt == 1:
+                    _LOGGER.warning("Fetch error (attempt %d): %s", attempt + 1, err)
+                else:
+                    _LOGGER.debug("Fetch error (attempt %d): %s", attempt + 1, err)
                 if attempt == 0:
                     await asyncio.sleep(1)
                     continue

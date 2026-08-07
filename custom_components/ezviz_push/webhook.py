@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from datetime import datetime
@@ -21,6 +22,13 @@ from .const import (
 from .device_manager import DeviceManager
 
 _LOGGER = logging.getLogger(__name__)
+
+# ys.calling action: 0=Ring, 1=Answer, 2=Hang Up
+CALLING_ACTION_NAMES = {
+    0: "Ring",
+    1: "Answer",
+    2: "Hang Up",
+}
 
 SIGNAL_DEVICE_NEW = f"{DOMAIN}_device_new"
 SIGNAL_DATA_RECEIVED = f"{DOMAIN}_data_received"
@@ -82,7 +90,10 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
     extracted: Dict[str, Any] = {}
 
     # Common fields for all message types
-    extracted["last_event"] = message_type
+    if message_type != MSG_TYPE_SHADOW_CHANGE:
+        # shadow.change is a config snapshot flood; it should not overwrite the
+        # meaningful last_event, only last_seen.
+        extracted["last_event"] = message_type
     extracted["last_seen"] = datetime.now().astimezone().isoformat()
     extracted["online"] = True
 
@@ -123,11 +134,27 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
             extracted["alarm_picture_url"] = url
             _LOGGER.debug("Alarm picture URL: %s", url)
 
+        # SmartFaceDet alarms carry a base64-encoded customInfo with the faceId
+        custom = body.get("customInfo") or ""
+        if custom:
+            try:
+                face_id = json.loads(base64.b64decode(custom).decode("utf-8")).get("faceId")
+            except Exception:
+                face_id = None
+            if face_id:
+                extracted["face_id"] = face_id
+                _LOGGER.debug("Alarm faceId: %s", face_id)
+
     elif message_type == MSG_TYPE_CALLING:
         # ys.calling
         extracted["calling_time"] = parse_timestamp(body.get("timestamp"))
         extracted["channel_name"] = body.get("channelName")
         extracted["calling_id"] = body.get("callingId")
+        action = body.get("action")
+        if action is not None:
+            extracted["calling_action"] = CALLING_ACTION_NAMES.get(
+                action, str(action)
+            )
 
         url = _safe_get(body, "coverUrl", "url")
         if url:
