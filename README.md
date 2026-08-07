@@ -6,7 +6,7 @@
 
 - 接收萤石云 webhook 推送（门铃呼叫、报警、设备状态）
 - 自动注册多设备，每个设备独立创建实体
-- 传感器：电池电量、WiFi信号、SD卡健康度、SD卡容量、充电状态、报警时间、呼叫时间、报警类型、最近事件、最后活动时间
+- 传感器：电池电量、WiFi信号、SD卡健康度、SD卡容量、充电状态、报警时间、呼叫时间、呼叫动作（响铃/接听/挂断）、人脸识别ID、报警类型、最近事件、最后活动时间
 - 开关：在线状态、门铃按铃、报警触发、布防状态、移动检测开关
 - 摄像头：报警图片、呼叫封面图片
 - 设备信息重启后持久化保留
@@ -22,14 +22,14 @@
 3. 在 HACS 列表中搜索「EZVIZ Cloud Push」→ 点击「安装」
 4. 重启 Home Assistant
 5. 设置 → 设备与服务 → 添加集成 → 搜索「EZVIZ Cloud Push」
-6. 配置 webhook ID（默认 `ezviz-push-webhook`）
+6. 配置 webhook ID（**务必用随机复杂字符串，不要用默认值**，见下方安全建议）
 
 ### 方式二：手动安装
 
 1. 将 `custom_components/ezviz_push/` 复制到 HA 的 `config/custom_components/` 目录
 2. 重启 Home Assistant
 3. 设置 → 设备与服务 → 添加集成 → 搜索 "EZVIZ Cloud Push"
-4. 配置 webhook ID（默认 `ezviz-push-webhook`）
+4. 配置 webhook ID（**务必用随机复杂字符串，不要用默认值**，见下方安全建议）
 
 ## 萤石云后台配置
 
@@ -42,9 +42,15 @@
 >
 > 推送地址必须为 HTTPS，否则萤石云与 HA 均会拒绝连接。
 
+> 🔐 **安全建议：webhook ID 越复杂越好**
+>
+> webhook 地址（`/api/webhook/<ID>`）暴露在公网，任何人拿到它都能伪装成萤石云推送伪造事件。
+> **务必把默认的 `ezviz-push-webhook` 改成一段随机复杂字符串**（如 `ezviz-e8f3a7c2-9b41-4d6e-a5c2-7f3b9d21`），
+> 不要用常见或可猜的 ID。安装时手动配置，并同步填写到萤石云后台。
+
 1. 登录 [萤石开放平台](https://open.ys7.com/)
 2. 进入 消息推送 → 新增推送地址
-3. URL 填写：`https://你的HA公网地址/api/webhook/ezviz-push-webhook`
+3. URL 填写：`https://你的HA公网地址/api/webhook/你的随机webhookID`
 4. 保存后，萤石云会自动推送门铃/猫眼事件到 HA
 
 ![萤石云后台配置](ezviz.png)
@@ -69,6 +75,8 @@
 | sensor | charging_status | 充电状态 |
 | sensor | alarm_time | 报警时间 |
 | sensor | calling_time | 呼叫时间 |
+| sensor | calling_action | 呼叫动作（响铃/接听/挂断） |
+| sensor | face_id | 人脸识别ID（需设备支持并已在萤石 App 开启人脸识别，且仅已登记的人脸会返回） |
 | sensor | alarm_type | 报警类型 |
 | sensor | last_event | 最近事件 |
 | sensor | last_seen | 最后活动时间（时间戳） |
