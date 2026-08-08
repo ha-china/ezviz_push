@@ -48,6 +48,22 @@
 > **务必把默认的 `ezviz-push-webhook` 改成一段随机复杂字符串**（如 `ezviz-e8f3a7c2-9b41-4d6e-a5c2-7f3b9d21`），
 > 不要用常见或可猜的 ID。安装时手动配置，并同步填写到萤石云后台。
 
+## 人脸识别配置（可选）
+
+> 前提：设备支持人脸识别，且已在萤石 App 开启并登记人脸。萤石云推来的 `faceId` 是设备侧的编码而非姓名，
+> 可通过本集成的「选项」配置映射表，让 `face_id` 传感器直接显示人名。
+
+1. 设置 → 设备与服务 → EZVIZ Cloud Push → 选项
+2. 在「人脸映射」里按 `faceId:人名` 填写，用逗号或换行分隔多条，例如：
+   ```
+   1a2b3c:爸爸, 4d5e6f:妈妈
+   7g8h9i:自己
+   ```
+3. 保存后，收到对应 faceId 时 `face_id` 传感器显示人名；未配置的仍显示原始码
+4. 原始 faceId 编码始终保留在 `face_id` 传感器的 `raw_face_id` 属性里，可用来做自动化匹配
+
+映射数量不设上限，设备人脸库能登记多少人就能映射多少人。
+
 1. 登录 [萤石开放平台](https://open.ys7.com/)
 2. 进入 消息推送 → 新增推送地址
 3. URL 填写：`https://你的HA公网地址/api/webhook/你的随机webhookID`
@@ -76,7 +92,7 @@
 | sensor | alarm_time | 报警时间 |
 | sensor | calling_time | 呼叫时间 |
 | sensor | calling_action | 呼叫动作（响铃/接听/挂断） |
-| sensor | face_id | 人脸识别ID（需设备支持并已在萤石 App 开启人脸识别，且仅已登记的人脸会返回） |
+| sensor | face_id | 人脸识别（需设备支持并开启；显示配置的人名，未配置则显示原始码） |
 | sensor | alarm_type | 报警类型 |
 | sensor | last_event | 最近事件 |
 | sensor | last_seen | 最后活动时间（时间戳） |

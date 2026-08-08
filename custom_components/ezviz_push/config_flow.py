@@ -7,10 +7,14 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 
-from .const import CONF_WEBHOOK_ID, DEFAULT_WEBHOOK_ID, DOMAIN
+from .const import CONF_FACE_MAPPING, CONF_WEBHOOK_ID, DEFAULT_WEBHOOK_ID, DOMAIN, FACE_MAPPING_EXAMPLE
 
 STEP_USER_DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_WEBHOOK_ID, default=DEFAULT_WEBHOOK_ID): cv.string,
+})
+
+STEP_FACE_MAPPING_SCHEMA = vol.Schema({
+    vol.Optional(CONF_FACE_MAPPING, default=FACE_MAPPING_EXAMPLE): cv.string,
 })
 
 
@@ -36,3 +40,19 @@ class EZVIZConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_import(self, import_config: dict[str, Any] | None = None) -> FlowResult:
         return await self.async_step_user(import_config)
+
+    @staticmethod
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> "EZVIZOptionsFlow":
+        return EZVIZOptionsFlow()
+
+
+class EZVIZOptionsFlow(config_entries.OptionsFlow):
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=STEP_FACE_MAPPING_SCHEMA,
+            description_placeholders={"webhook_id": self.config_entry.data.get(CONF_WEBHOOK_ID, "")},
+        )

@@ -3,6 +3,8 @@ MANUFACTURER = "EZVIZ"
 
 CONF_WEBHOOK_ID = "webhook_id"
 DEFAULT_WEBHOOK_ID = "ezviz-push-webhook"
+CONF_FACE_MAPPING = "face_mapping"
+FACE_MAPPING_EXAMPLE = "1a2b3c:爸爸, 4d5e6f:妈妈"
 
 # Message types from EZVIZ cloud
 MSG_TYPE_DEVICE_STATUS = "ys.devicestatus"

@@ -12,7 +12,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
+    CONF_FACE_MAPPING,
     DOMAIN,
+    FACE_MAPPING_EXAMPLE,
     MSG_TYPE_ALARM,
     MSG_TYPE_CALLING,
     MSG_TYPE_DEVICE_STATUS,
@@ -31,6 +33,28 @@ CALLING_ACTION_NAMES = {
 }
 
 SIGNAL_DEVICE_NEW = f"{DOMAIN}_device_new"
+
+
+def parse_face_mapping(raw: str) -> Dict[str, str]:
+    """Parse 'faceId:人名' entries separated by commas and/or newlines."""
+    mapping: Dict[str, str] = {}
+    if not raw or str(raw).strip() == FACE_MAPPING_EXAMPLE:
+        return mapping
+    for part in str(raw).replace(",", "\n").splitlines():
+        part = part.strip()
+        if not part or part.startswith("#") or ":" not in part:
+            continue
+        key, _, name = part.partition(":")
+        key = key.strip()
+        name = name.strip()
+        if key:
+            mapping[key] = name
+    return mapping
+
+
+def _get_entry_options(hass: HomeAssistant) -> Dict[str, Any]:
+    entries = hass.config_entries.async_entries(DOMAIN)
+    return entries[0].options if entries else {}
 SIGNAL_DATA_RECEIVED = f"{DOMAIN}_data_received"
 
 POWER_TYPE_MAP = {"0": "Charging", "1": "On Battery", 0: "Charging", 1: "On Battery"}
@@ -222,6 +246,14 @@ async def handle_webhook(hass: HomeAssistant, webhook_id: str, request: web.Requ
     device_type = extracted.get("device_type")
     if device_type:
         await device_manager.async_update_device_model(device_id, device_type)
+
+    # Map raw faceId code to a configured person name
+    raw_face_id = extracted.get("face_id")
+    if raw_face_id:
+        extracted["face_id_raw"] = raw_face_id
+        name = parse_face_mapping(_get_entry_options(hass).get(CONF_FACE_MAPPING, "")).get(raw_face_id)
+        if name:
+            extracted["face_id"] = name
 
     extracted["_message_type"] = message_type
     extracted["_timestamp"] = datetime.now().isoformat()

@@ -145,6 +145,7 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
         self._attr_should_poll = False
         self._attr_available = False
         self._attr_native_value = None
+        self._attr_extra_state_attributes = {}
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -206,6 +207,8 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
                 value = dt
             except (ValueError, TypeError):
                 pass
+        if self._sensor_key == "face_id" and data.get("face_id_raw"):
+            self._attr_extra_state_attributes["raw_face_id"] = data["face_id_raw"]
         self._attr_native_value = value
         self._attr_available = True
         self.async_write_ha_state()
