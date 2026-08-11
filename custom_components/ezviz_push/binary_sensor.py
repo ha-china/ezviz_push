@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL, MSG_TYPE_ALARM, MSG_TYPE_CALLING
@@ -56,6 +57,7 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
         self._attr_device_class = device_class
         self._attr_available = False
         self._attr_is_on = False
+        self._timer = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -90,6 +92,11 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
     def _handle_data(self, data: dict) -> None:
         pass
 
+    async def async_will_remove_from_hass(self) -> None:
+        if self._timer is not None:
+            self._timer()
+            self._timer = None
+
 
 class EZVIZOnlineBinarySensor(_EZVIZBinarySensor):
     def __init__(self, device_id: str, device_manager) -> None:
@@ -116,9 +123,9 @@ class EZVIZDoorbellRingBinarySensor(_EZVIZBinarySensor):
             self._attr_is_on = True
             self._attr_available = True
             self.async_write_ha_state()
-            self._timer = self.hass.loop.call_later(30, self._safe_reset)
+            self._timer = async_call_later(self.hass, 30, self._safe_reset)
 
-    def _safe_reset(self) -> None:
+    def _safe_reset(self, *_args: object) -> None:
         if self._attr_available:
             self._attr_is_on = False
             self.async_write_ha_state()
@@ -135,9 +142,9 @@ class EZVIZAlarmBinarySensor(_EZVIZBinarySensor):
             self._attr_is_on = True
             self._attr_available = True
             self.async_write_ha_state()
-            self._timer = self.hass.loop.call_later(30, self._safe_reset)
+            self._timer = async_call_later(self.hass, 30, self._safe_reset)
 
-    def _safe_reset(self) -> None:
+    def _safe_reset(self, *_args: object) -> None:
         if self._attr_available:
             self._attr_is_on = False
             self.async_write_ha_state()

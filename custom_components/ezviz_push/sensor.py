@@ -24,7 +24,7 @@ SENSOR_TYPES = {
         "icon": None,
         "device_class": SensorDeviceClass.BATTERY,
         "state_class": SensorStateClass.MEASUREMENT,
-        "unit": PERCENTAGE,
+        "unit": None,
     },
     "wifi_signal": {
         "icon": "mdi:wifi",
