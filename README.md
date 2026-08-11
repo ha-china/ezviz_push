@@ -92,7 +92,7 @@
 | sensor | alarm_time | 报警时间 |
 | sensor | calling_time | 呼叫时间 |
 | sensor | calling_action | 呼叫动作（响铃/接听/挂断） |
-| sensor | face_id | 人脸识别（需设备支持并开启；显示配置的人名，未配置则显示原始码） |
+| sensor | face_id | 人脸识别（显示配置的人名/原始码，未识别时显示「未录入人脸」） |
 | sensor | alarm_type | 报警类型 |
 | sensor | last_event | 最近事件 |
 | sensor | last_seen | 最后活动时间（时间戳） |

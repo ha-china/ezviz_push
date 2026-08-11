@@ -158,15 +158,18 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
             extracted["alarm_picture_url"] = url
             _LOGGER.debug("Alarm picture URL: %s", url)
 
-        # SmartFaceDet alarms carry a base64-encoded customInfo with the faceId
-        custom = body.get("customInfo") or ""
-        if custom:
-            try:
-                face_id = json.loads(base64.b64decode(custom).decode("utf-8")).get("faceId")
-            except Exception:
-                face_id = None
+        # SmartFaceDet carries a base64-encoded customInfo with the faceId (may be
+        # empty when the face is not registered).
+        if body.get("alarmType") == "SmartFaceDet":
+            face_id = None
+            custom = body.get("customInfo") or ""
+            if custom:
+                try:
+                    face_id = json.loads(base64.b64decode(custom).decode("utf-8")).get("faceId")
+                except Exception:
+                    face_id = None
+            extracted["face_id"] = face_id
             if face_id:
-                extracted["face_id"] = face_id
                 _LOGGER.debug("Alarm faceId: %s", face_id)
 
     elif message_type == MSG_TYPE_CALLING:
@@ -247,13 +250,16 @@ async def handle_webhook(hass: HomeAssistant, webhook_id: str, request: web.Requ
     if device_type:
         await device_manager.async_update_device_model(device_id, device_type)
 
-    # Map raw faceId code to a configured person name
-    raw_face_id = extracted.get("face_id")
-    if raw_face_id:
-        extracted["face_id_raw"] = raw_face_id
-        name = parse_face_mapping(_get_entry_options(hass).get(CONF_FACE_MAPPING, "")).get(raw_face_id)
-        if name:
-            extracted["face_id"] = name
+    # Map raw faceId code to a configured person name; empty faceId => 未录入人脸
+    if "face_id" in extracted:
+        raw_face_id = extracted["face_id"]
+        if raw_face_id:
+            extracted["face_id_raw"] = raw_face_id
+            name = parse_face_mapping(_get_entry_options(hass).get(CONF_FACE_MAPPING, "")).get(raw_face_id)
+            if name:
+                extracted["face_id"] = name
+        else:
+            extracted["face_id"] = "未录入人脸"
 
     extracted["_message_type"] = message_type
     extracted["_timestamp"] = datetime.now().isoformat()
