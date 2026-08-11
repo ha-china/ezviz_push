@@ -39,8 +39,8 @@ async def async_setup_entry(
     @callback
     def _device_added(device_id: str) -> None:
         entities = [
-            EZVIZCamera(hass, device_id, "alarm_picture", "Alarm Picture", "alarm_picture_url", image_handler, device_manager),
-            EZVIZCamera(hass, device_id, "calling_picture", "Calling Picture", "calling_picture_url", image_handler, device_manager),
+            EZVIZCamera(hass, device_id, "alarm_picture", "alarm_picture_url", image_handler, device_manager),
+            EZVIZCamera(hass, device_id, "calling_picture", "calling_picture_url", image_handler, device_manager),
         ]
         async_add_entities(entities)
 
@@ -58,7 +58,6 @@ class EZVIZCamera(Camera):
         hass: HomeAssistant,
         device_id: str,
         camera_key: str,
-        name: str,
         url_key: str,
         image_handler: ImageHandler,
         device_manager,
@@ -72,7 +71,8 @@ class EZVIZCamera(Camera):
         self._image_handler = image_handler
         self._image_path = _image_path(hass, device_id, camera_key)
         self._attr_unique_id = f"{device_id}_{camera_key}"
-        self._attr_name = name
+        self._attr_has_entity_name = True
+        self._attr_translation_key = camera_key
         self._attr_should_poll = False
         self._attr_available = False
         self._current_image: Optional[bytes] = None

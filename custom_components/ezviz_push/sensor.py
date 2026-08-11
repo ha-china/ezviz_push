@@ -137,7 +137,8 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
         self._sensor_key = sensor_key
         self._config = sensor_config
         self._attr_unique_id = f"{device_id}_{sensor_key}"
-        self._attr_name = sensor_config["name"]
+        self._attr_has_entity_name = True
+        self._attr_translation_key = sensor_key
         self._attr_icon = sensor_config["icon"]
         self._attr_device_class = sensor_config["device_class"]
         self._attr_state_class = sensor_config["state_class"]

@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EZVIZ Cloud Push 萤石云推送",
+        "description": "配置 EZVIZ 云推送集成。\n\n设置一个 webhook ID，然后在萤石开放平台配置此 URL：\n\n`{webhook_url}`",
+        "data": {
+          "webhook_id": "Webhook ID"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "只允许一个实例。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EZVIZ Cloud Push 萤石云推送",
+        "description": "可选：将设备 faceId 编码映射为人名。请用你的真实值替换示例。",
+        "data": {
+          "face_mapping": "人脸映射（faceId:人名）"
+        },
+        "data_description": {
+          "face_mapping": "每条 `faceId:人名`，用逗号或换行分隔。\n\n示例：\n`1a2b3c:爸爸, 4d5e6f:妈妈`"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": { "name": "电池电量" },
+      "wifi_signal": { "name": "WiFi 信号" },
+      "sd_health": { "name": "SD 卡健康度" },
+      "sd_capacity": { "name": "SD 卡容量" },
+      "charging_status": { "name": "充电状态" },
+      "alarm_time": { "name": "报警时间" },
+      "calling_time": { "name": "呼叫时间" },
+      "calling_action": { "name": "呼叫动作" },
+      "face_id": { "name": "人脸识别" },
+      "alarm_type": { "name": "报警类型" },
+      "last_event": { "name": "最近事件" },
+      "last_seen": { "name": "最后活动时间" }
+    },
+    "binary_sensor": {
+      "online": { "name": "在线" },
+      "doorbell_ring": { "name": "门铃按铃" },
+      "alarm": { "name": "报警" },
+      "armed": { "name": "布防" },
+      "detection_enabled": { "name": "移动检测" }
+    },
+    "camera": {
+      "alarm_picture": { "name": "报警图片" },
+      "calling_picture": { "name": "呼叫图片" }
+    }
+  }
+}
