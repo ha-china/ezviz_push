@@ -36,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN]["webhook_id"] = webhook_id
 
     async_register(hass, DOMAIN, "EZVIZ Cloud Push", webhook_id, handle_webhook)
+    entry.async_on_unload(lambda: async_unregister(hass, webhook_id))
 
     _LOGGER.info(
         "EZVIZ integration ready. Configure webhook URL in EZVIZ cloud: "
@@ -55,11 +56,10 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    webhook_id = hass.data[DOMAIN].get("webhook_id", DEFAULT_WEBHOOK_ID)
-    async_unregister(hass, webhook_id)
-
-    image_handler: ImageHandler = hass.data[DOMAIN]["image_handler"]
-    await image_handler.close()
+    data = hass.data.get(DOMAIN, {})
+    image_handler: ImageHandler | None = data.get("image_handler")
+    if image_handler is not None:
+        await image_handler.close()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
