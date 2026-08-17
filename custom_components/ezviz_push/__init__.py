@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 
 from .const import CONF_WEBHOOK_ID, DEFAULT_WEBHOOK_ID, DOMAIN
 from .device_manager import DeviceManager
@@ -53,6 +54,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Allow removing a single device from the integration."""
+    for domain, device_id in device_entry.identifiers:
+        if domain != DOMAIN:
+            continue
+        device_manager: DeviceManager = hass.data[DOMAIN]["device_manager"]
+        removed = await device_manager.async_remove_device(device_id)
+        return removed
+    return False
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

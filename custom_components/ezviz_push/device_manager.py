@@ -86,6 +86,12 @@ class DeviceManager:
             device.device_type = model
             await self.async_save()
 
+    async def async_remove_device(self, device_id: str) -> bool:
+        if self._devices.pop(device_id, None) is not None:
+            await self.async_save()
+            return True
+        return False
+
     def get_device(self, device_id: str) -> Optional[DeviceInfo]:
         return self._devices.get(device_id)
 
