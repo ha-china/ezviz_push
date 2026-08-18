@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL, MSG_TYPE_ALARM, MSG_TYPE_CALLING
@@ -94,7 +93,7 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         if self._timer is not None:
-            self._timer()
+            self._timer.cancel()
             self._timer = None
 
 
@@ -123,7 +122,7 @@ class EZVIZDoorbellRingBinarySensor(_EZVIZBinarySensor):
             self._attr_is_on = True
             self._attr_available = True
             self.async_write_ha_state()
-            self._timer = async_call_later(self.hass, 30, self._safe_reset)
+            self._timer = self.hass.loop.call_later(30, self._safe_reset)
 
     def _safe_reset(self, *_args: object) -> None:
         if self._attr_available:
@@ -142,7 +141,7 @@ class EZVIZAlarmBinarySensor(_EZVIZBinarySensor):
             self._attr_is_on = True
             self._attr_available = True
             self.async_write_ha_state()
-            self._timer = async_call_later(self.hass, 30, self._safe_reset)
+            self._timer = self.hass.loop.call_later(30, self._safe_reset)
 
     def _safe_reset(self, *_args: object) -> None:
         if self._attr_available:
