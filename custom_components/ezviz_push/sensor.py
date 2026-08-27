@@ -195,6 +195,9 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
         self._attr_available = False
         self._attr_native_value = None
         self._attr_extra_state_attributes = {}
+        # True when the entity was created carrying fresh data from its very
+        # first message; restore must not overwrite it with older values.
+        self._has_initial_value = False
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -213,25 +216,27 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        # Restore last known state after restart
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state not in ("unknown", "unavailable"):
-                value = last_state.state
-                if self._config["device_class"] == SensorDeviceClass.TIMESTAMP:
-                    try:
-                        dt = datetime.fromisoformat(value)
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=dt_util.get_default_time_zone())
-                        value = dt
-                    except (ValueError, TypeError):
-                        pass
-                elif self._config["unit"] is not None:
-                    try:
-                        value = float(value)
-                    except (TypeError, ValueError):
-                        pass
-                self._attr_native_value = value
-                self._attr_available = True
+        # Restore last known state after restart, unless the entity was just
+        # created with fresh data from its first message.
+        if not self._has_initial_value:
+            if (last_state := await self.async_get_last_state()) is not None:
+                if last_state.state not in ("unknown", "unavailable"):
+                    value = last_state.state
+                    if self._config["device_class"] == SensorDeviceClass.TIMESTAMP:
+                        try:
+                            dt = datetime.fromisoformat(value)
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=dt_util.get_default_time_zone())
+                            value = dt
+                        except (ValueError, TypeError):
+                            pass
+                    elif self._config["unit"] is not None:
+                        try:
+                            value = float(value)
+                        except (TypeError, ValueError):
+                            pass
+                    self._attr_native_value = value
+                    self._attr_available = True
 
         self.async_on_remove(
             async_dispatcher_connect(
@@ -269,4 +274,5 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
             self._attr_extra_state_attributes["raw_face_id"] = data["face_id_raw"]
         self._attr_native_value = value
         self._attr_available = True
+        self._has_initial_value = True
         return True

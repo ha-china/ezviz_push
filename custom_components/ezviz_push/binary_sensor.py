@@ -145,6 +145,9 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
         # Set True when created from live data so the auto-reset timer starts
         # once the entity is actually added to hass.
         self._pending_reset = False
+        # True when apply_initial already applied fresh data; restore from
+        # the persisted state must not overwrite it with older values.
+        self._has_initial_state = False
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -163,10 +166,11 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state not in ("unknown", "unavailable"):
-                self._attr_is_on = last_state.state == "on"
-                self._attr_available = True
+        if not self._has_initial_state:
+            if (last_state := await self.async_get_last_state()) is not None:
+                if last_state.state not in ("unknown", "unavailable"):
+                    self._attr_is_on = last_state.state == "on"
+                    self._attr_available = True
         if self._pending_reset:
             self._start_reset_timer()
             self._pending_reset = False
@@ -195,6 +199,9 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
     def apply_initial(self, data: dict) -> bool:
         """Apply state from extracted data before the entity is added."""
         return False
+
+    def _mark_initial_applied(self) -> None:
+        self._has_initial_state = True
 
     async def async_will_remove_from_hass(self) -> None:
         if self._timer is not None:
@@ -229,6 +236,7 @@ class EZVIZDoorbellRingBinarySensor(_EZVIZBinarySensor):
         self._attr_is_on = True
         self._attr_available = True
         self._pending_reset = True
+        self._mark_initial_applied()
         return True
 
     @callback
@@ -257,6 +265,7 @@ class EZVIZAlarmBinarySensor(_EZVIZBinarySensor):
         self._attr_is_on = True
         self._attr_available = True
         self._pending_reset = True
+        self._mark_initial_applied()
         return True
 
     @callback
@@ -283,6 +292,7 @@ class EZVIZArmedBinarySensor(_EZVIZBinarySensor):
             return False
         self._attr_is_on = bool(data["armed"])
         self._attr_available = True
+        self._mark_initial_applied()
         return True
 
     @callback
@@ -302,6 +312,7 @@ class EZVIZDetectionBinarySensor(_EZVIZBinarySensor):
             return False
         self._attr_is_on = bool(data["detection_enabled"])
         self._attr_available = True
+        self._mark_initial_applied()
         return True
 
     @callback

@@ -71,6 +71,9 @@ async def async_remove_config_entry_device(
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = hass.data.get(DOMAIN, {})
+    device_manager = data.get("device_manager")
+    if device_manager is not None:
+        await device_manager.async_flush()
     image_handler: ImageHandler | None = data.get("image_handler")
     if image_handler is not None:
         await image_handler.close()

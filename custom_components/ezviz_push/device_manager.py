@@ -38,10 +38,13 @@ class DeviceInfo:
 
 
 class DeviceManager:
+    SAVE_DELAY = 10
+
     def __init__(self, hass) -> None:
         self._hass = hass
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._devices: Dict[str, DeviceInfo] = {}
+        self._flush_handle = None
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
@@ -57,13 +60,37 @@ class DeviceManager:
             [d.to_dict() for d in self._devices.values()]
         )
 
+    def schedule_save(self) -> None:
+        """Coalesce frequent mutations into one delayed write.
+
+        Webhook handling must not block on disk I/O; EZVIZ requires the
+        callback to respond within 2 s or it marks the push as failed.
+        """
+        if self._flush_handle is not None:
+            return
+        self._flush_handle = self._hass.loop.call_later(
+            self.SAVE_DELAY,
+            lambda: self._hass.async_create_task(self._delayed_flush()),
+        )
+
+    async def _delayed_flush(self) -> None:
+        self._flush_handle = None
+        await self.async_save()
+
+    async def async_flush(self) -> None:
+        """Cancel any pending debounce and write immediately."""
+        if self._flush_handle is not None:
+            self._flush_handle.cancel()
+            self._flush_handle = None
+            await self.async_save()
+
     async def async_ensure_device(self, device_id: str) -> tuple[DeviceInfo, bool]:
         now = datetime.now().isoformat()
         existing = self._devices.get(device_id)
         if existing is not None:
             existing.last_seen = now
             existing.message_count += 1
-            await self.async_save()
+            self.schedule_save()
             return existing, False
 
         info = DeviceInfo(
@@ -74,20 +101,20 @@ class DeviceManager:
             friendly_name=f"EZVIZ {device_id[:8]}",
         )
         self._devices[device_id] = info
-        await self.async_save()
+        self.schedule_save()
         return info, True
 
     async def async_update_device_name(self, device_id: str, name: str) -> None:
         device = self._devices.get(device_id)
         if device and name and device.friendly_name != name:
             device.friendly_name = name
-            await self.async_save()
+            self.schedule_save()
 
     async def async_update_device_model(self, device_id: str, model: str) -> None:
         device = self._devices.get(device_id)
         if device and model and device.device_type != model:
             device.device_type = model
-            await self.async_save()
+            self.schedule_save()
 
     async def async_add_entity_key(self, device_id: str, key: str) -> None:
         """Record that a data field has produced a real value for this device.
@@ -98,7 +125,7 @@ class DeviceManager:
         if device is None or key in device.entity_keys:
             return
         device.entity_keys.append(key)
-        await self.async_save()
+        self.schedule_save()
 
     def get_entity_keys(self, device_id: str) -> list[str]:
         device = self._devices.get(device_id)

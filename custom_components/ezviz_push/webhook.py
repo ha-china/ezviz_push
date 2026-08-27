@@ -226,11 +226,31 @@ async def handle_webhook(hass: HomeAssistant, webhook_id: str, request: web.Requ
         _LOGGER.warning("Webhook missing deviceId")
         return web.json_response({"error": "missing deviceId"}, status=400)
 
-    _LOGGER.info("Webhook: device=%s type=%s", device_id, message_type)
-
     if DOMAIN not in hass.data:
         return web.json_response({"error": "integration not loaded"}, status=500)
 
+    _LOGGER.info("Webhook: device=%s type=%s", device_id, message_type)
+
+    # ACK immediately: EZVIZ requires the callback to respond with HTTP 200
+    # within 2 s, otherwise the push is marked as failed in their console.
+    # All heavy work (storage writes, entity creation) runs in a task.
+    async def _process() -> None:
+        try:
+            await _handle_message(hass, device_id, message_id, message_type, body_data)
+        except Exception:
+            _LOGGER.exception("Failed processing webhook %s", message_id)
+
+    hass.async_create_task(_process())
+    return web.json_response({"messageId": message_id})
+
+
+async def _handle_message(
+    hass: HomeAssistant,
+    device_id: str,
+    message_id: str,
+    message_type: str,
+    body_data: Dict[str, Any],
+) -> None:
     device_manager: DeviceManager = hass.data[DOMAIN]["device_manager"]
 
     _, is_new = await device_manager.async_ensure_device(device_id)
@@ -267,5 +287,3 @@ async def handle_webhook(hass: HomeAssistant, webhook_id: str, request: web.Requ
     _LOGGER.debug("Extracted data for %s: %s", device_id, {k: v for k, v in extracted.items() if not k.startswith("_")})
 
     async_dispatcher_send(hass, f"{SIGNAL_DATA_RECEIVED}_{device_id}", extracted)
-
-    return web.json_response({"messageId": message_id})
