@@ -2,20 +2,29 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import partial
 from typing import Optional
 
 from homeassistant.components.camera import Camera
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL
+from .entity_registry import prune_stale_entities, split_unique_id
 from .image_handler import ImageHandler
 from .webhook import SIGNAL_DATA_RECEIVED, SIGNAL_DEVICE_NEW
 
 _LOGGER = logging.getLogger(__name__)
+
+# entity key → extracted-data key carrying the picture URL
+CAMERA_URL_KEYS = {
+    "alarm_picture": "alarm_picture_url",
+    "calling_picture": "calling_picture_url",
+}
 
 
 def _image_dir(hass: HomeAssistant) -> str:
@@ -28,6 +37,14 @@ def _image_path(hass: HomeAssistant, device_id: str, camera_key: str) -> str:
     return os.path.join(_image_dir(hass), f"{device_id}_{camera_key}.jpg")
 
 
+def _keep_if_image_on_disk(hass: HomeAssistant, entry) -> bool:
+    """Camera entities persist their last picture to disk; that is the
+    reliable 'had data' signal across restarts."""
+    return os.path.exists(
+        hass.config.path("ezviz_push_images", f"{entry.unique_id}.jpg")
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -35,20 +52,81 @@ async def async_setup_entry(
 ) -> None:
     device_manager = hass.data[DOMAIN]["device_manager"]
     image_handler = hass.data[DOMAIN]["image_handler"]
+    created: dict[str, set[str]] = {}
+    # Keys re-seeded from registry entries kept during cleanup below.
+    seeded: dict[str, set[str]] = {}
+
+    kept = prune_stale_entities(
+        hass,
+        config_entry,
+        Platform.CAMERA,
+        {
+            f"{device_id}_{key}"
+            for device_id in device_manager.get_all_devices()
+            for key in CAMERA_URL_KEYS
+            if key in device_manager.get_entity_keys(device_id)
+        },
+        keep_check=_keep_if_image_on_disk,
+    )
+    for unique_id in kept:
+        device_id, key = split_unique_id(unique_id, set(CAMERA_URL_KEYS))
+        if device_id is None:
+            continue
+        seeded.setdefault(device_id, set()).add(key)
+        hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
 
     @callback
-    def _device_added(device_id: str) -> None:
-        entities = [
-            EZVIZCamera(hass, device_id, "alarm_picture", "alarm_picture_url", image_handler, device_manager),
-            EZVIZCamera(hass, device_id, "calling_picture", "calling_picture_url", image_handler, device_manager),
-        ]
-        async_add_entities(entities)
+    def _add_missing(device_id: str, data: dict | None = None) -> None:
+        known = created.setdefault(device_id, set())
+        new_entities = []
+        if data is None:
+            restore_keys = (
+                set(device_manager.get_entity_keys(device_id))
+                | seeded.get(device_id, set())
+            )
+            candidates = {
+                key: CAMERA_URL_KEYS[key]
+                for key in restore_keys
+                if key in CAMERA_URL_KEYS
+            }
+        else:
+            candidates = {
+                key: url_key
+                for key, url_key in CAMERA_URL_KEYS.items()
+                if data.get(url_key)
+            }
+        for key, url_key in candidates.items():
+            if key in known:
+                continue
+            known.add(key)
+            entity = EZVIZCamera(
+                hass, device_id, key, url_key, image_handler, device_manager
+            )
+            if data is not None:
+                entity.apply_initial(data)
+                hass.async_create_task(
+                    device_manager.async_add_entity_key(device_id, key)
+                )
+            new_entities.append(entity)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    @callback
+    def _register_device(device_id: str) -> None:
+        config_entry.async_on_unload(
+            async_dispatcher_connect(
+                hass,
+                f"{SIGNAL_DATA_RECEIVED}_{device_id}",
+                partial(_add_missing, device_id),
+            )
+        )
+        _add_missing(device_id)
 
     for device_id in device_manager.get_all_devices():
-        _device_added(device_id)
+        _register_device(device_id)
 
     config_entry.async_on_unload(
-        async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, _device_added)
+        async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, _register_device)
     )
 
 
@@ -76,6 +154,16 @@ class EZVIZCamera(Camera):
         self._attr_should_poll = False
         self._attr_available = False
         self._current_image: Optional[bytes] = None
+        self._pending_url: Optional[str] = None
+
+    def apply_initial(self, data: dict) -> bool:
+        """Store the URL from the first message so it is fetched once added."""
+        url = data.get(self._url_key)
+        if not url:
+            return False
+        self._pending_url = url
+        self._attr_available = True
+        return True
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -107,6 +195,10 @@ class EZVIZCamera(Camera):
                 _LOGGER.info("Loaded saved image for %s/%s", self._device_id, self._camera_key)
             except Exception as err:
                 _LOGGER.warning("Failed to load saved image: %s", err)
+
+        if self._pending_url:
+            url, self._pending_url = self._pending_url, None
+            self.hass.async_create_task(self._fetch_image(url))
 
         self.async_on_remove(
             async_dispatcher_connect(

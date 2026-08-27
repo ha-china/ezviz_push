@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import partial
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -8,7 +9,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfInformation
+from homeassistant.const import PERCENTAGE, Platform, UnitOfInformation
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
@@ -17,6 +18,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL
+from .entity_registry import prune_stale_entities, split_unique_id
 from .webhook import SIGNAL_DATA_RECEIVED, SIGNAL_DEVICE_NEW
 
 SENSOR_TYPES = {
@@ -101,20 +103,78 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     device_manager = hass.data[DOMAIN]["device_manager"]
+    created: dict[str, set[str]] = {}
+    # Keys re-seeded from registry entries kept during cleanup below.
+    seeded: dict[str, set[str]] = {}
+
+    kept = prune_stale_entities(
+        hass,
+        config_entry,
+        Platform.SENSOR,
+        {
+            f"{device_id}_{key}"
+            for device_id in device_manager.get_all_devices()
+            for key in SENSOR_TYPES
+            if key in device_manager.get_entity_keys(device_id)
+        },
+    )
+    # Entities from older versions that already hold values: keep them and
+    # re-seed their keys so they persist as lazily-created entities.
+    for unique_id in kept:
+        device_id, key = split_unique_id(unique_id, set(SENSOR_TYPES))
+        if device_id is None:
+            continue
+        seeded.setdefault(device_id, set()).add(key)
+        hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
 
     @callback
-    def _device_added(device_id: str) -> None:
-        sensors = [
-            EZVIZSensor(device_id, sensor_key, sensor_config, device_manager)
-            for sensor_key, sensor_config in SENSOR_TYPES.items()
-        ]
-        async_add_entities(sensors)
+    def _add_missing(device_id: str, data: dict | None = None) -> None:
+        # data=None → restore from persisted keys (startup) plus re-seeded
+        # keys from this session's registry cleanup; otherwise create
+        # entities for any new key carrying a real value.
+        if data is None:
+            restore_keys = (
+                set(device_manager.get_entity_keys(device_id))
+                | seeded.get(device_id, set())
+            )
+            candidates = [key for key in restore_keys if key in SENSOR_TYPES]
+        else:
+            candidates = [
+                key for key, value in data.items()
+                if key in SENSOR_TYPES and value is not None
+            ]
+        known = created.setdefault(device_id, set())
+        new_entities = []
+        for key in candidates:
+            if key in known:
+                continue
+            known.add(key)
+            entity = EZVIZSensor(device_id, key, SENSOR_TYPES[key], device_manager)
+            if data is not None:
+                entity.apply_initial(data)
+                hass.async_create_task(
+                    device_manager.async_add_entity_key(device_id, key)
+                )
+            new_entities.append(entity)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    @callback
+    def _register_device(device_id: str) -> None:
+        config_entry.async_on_unload(
+            async_dispatcher_connect(
+                hass,
+                f"{SIGNAL_DATA_RECEIVED}_{device_id}",
+                partial(_add_missing, device_id),
+            )
+        )
+        _add_missing(device_id)
 
     for device_id in device_manager.get_all_devices():
-        _device_added(device_id)
+        _register_device(device_id)
 
     config_entry.async_on_unload(
-        async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, _device_added)
+        async_dispatcher_connect(hass, SIGNAL_DEVICE_NEW, _register_device)
     )
 
 
@@ -183,11 +243,20 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
 
     @callback
     def _handle_data(self, data: dict) -> None:
+        if self.apply_initial(data):
+            self.async_write_ha_state()
+
+    def apply_initial(self, data: dict) -> bool:
+        """Apply values from extracted data without writing HA state.
+
+        Used both by live updates and when the entity is created from the
+        very first message carrying its value.
+        """
         if self._sensor_key not in data:
-            return
+            return False
         value = data[self._sensor_key]
         if value is None:
-            return
+            return False
         if self._config["device_class"] == SensorDeviceClass.TIMESTAMP and isinstance(value, str):
             try:
                 dt = datetime.fromisoformat(value)
@@ -200,4 +269,4 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
             self._attr_extra_state_attributes["raw_face_id"] = data["face_id_raw"]
         self._attr_native_value = value
         self._attr_available = True
-        self.async_write_ha_state()
+        return True

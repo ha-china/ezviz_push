@@ -44,7 +44,7 @@
     },
     "binary_sensor": {
       "online": { "name": "在线" },
-      "doorbell_ring": { "name": "门铃按铃" },
+      "doorbell_ring": { "name": "呼叫按铃" },
       "alarm": { "name": "报警" },
       "armed": { "name": "布防" },
       "detection_enabled": { "name": "移动检测" }

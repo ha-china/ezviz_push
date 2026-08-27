@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -18,6 +18,7 @@ class DeviceInfo:
     message_count: int = 0
     friendly_name: str = ""
     device_type: str = ""
+    entity_keys: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -27,11 +28,13 @@ class DeviceInfo:
             "message_count": self.message_count,
             "friendly_name": self.friendly_name,
             "device_type": self.device_type,
+            "entity_keys": self.entity_keys,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> DeviceInfo:
-        return cls(**data)
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 class DeviceManager:
@@ -85,6 +88,21 @@ class DeviceManager:
         if device and model and device.device_type != model:
             device.device_type = model
             await self.async_save()
+
+    async def async_add_entity_key(self, device_id: str, key: str) -> None:
+        """Record that a data field has produced a real value for this device.
+
+        Used to recreate lazily-created entities after restart.
+        """
+        device = self._devices.get(device_id)
+        if device is None or key in device.entity_keys:
+            return
+        device.entity_keys.append(key)
+        await self.async_save()
+
+    def get_entity_keys(self, device_id: str) -> list[str]:
+        device = self._devices.get(device_id)
+        return list(device.entity_keys) if device else []
 
     async def async_remove_device(self, device_id: str) -> bool:
         if self._devices.pop(device_id, None) is not None:
