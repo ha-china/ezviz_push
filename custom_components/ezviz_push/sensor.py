@@ -18,7 +18,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL
-from .entity_registry import prune_stale_entities, split_unique_id
+from .entity_registry import prune_stale_entities
 from .webhook import SIGNAL_DATA_RECEIVED, SIGNAL_DEVICE_NEW
 
 SENSOR_TYPES = {
@@ -26,7 +26,7 @@ SENSOR_TYPES = {
         "icon": None,
         "device_class": SensorDeviceClass.BATTERY,
         "state_class": SensorStateClass.MEASUREMENT,
-        "unit": None,
+        "unit": PERCENTAGE,
     },
     "wifi_signal": {
         "icon": "mdi:wifi",
@@ -96,6 +96,28 @@ SENSOR_TYPES = {
     },
 }
 
+# Per-alarm-type trigger time entities (alarm_time_<type>); their config is
+# shared with the generic alarm_time sensor. Localized names live in
+# translations/<lang>.json under entity.sensor.<key>. Unknown types fall
+# back to the raw key.
+ALARM_TIME_PREFIX = "alarm_time_"
+
+
+def is_alarm_time_key(key: str) -> bool:
+    return key.startswith(ALARM_TIME_PREFIX)
+
+
+def sensor_config_for_key(key: str) -> dict | None:
+    if key in SENSOR_TYPES:
+        return SENSOR_TYPES[key]
+    if is_alarm_time_key(key):
+        return SENSOR_TYPES["alarm_time"]
+    return None
+
+
+def is_sensor_key(key: str) -> bool:
+    return sensor_config_for_key(key) is not None
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -114,18 +136,23 @@ async def async_setup_entry(
         {
             f"{device_id}_{key}"
             for device_id in device_manager.get_all_devices()
-            for key in SENSOR_TYPES
-            if key in device_manager.get_entity_keys(device_id)
+            for key in device_manager.get_entity_keys(device_id)
+            if is_sensor_key(key)
         },
     )
     # Entities from older versions that already hold values: keep them and
     # re-seed their keys so they persist as lazily-created entities.
     for unique_id in kept:
-        device_id, key = split_unique_id(unique_id, set(SENSOR_TYPES))
-        if device_id is None:
-            continue
-        seeded.setdefault(device_id, set()).add(key)
-        hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
+        for device_id in device_manager.get_all_devices():
+            prefix = f"{device_id}_"
+            if not unique_id.startswith(prefix):
+                continue
+            key = unique_id[len(prefix):]
+            if not is_sensor_key(key):
+                continue
+            seeded.setdefault(device_id, set()).add(key)
+            hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
+            break
 
     @callback
     def _add_missing(device_id: str, data: dict | None = None) -> None:
@@ -137,11 +164,11 @@ async def async_setup_entry(
                 set(device_manager.get_entity_keys(device_id))
                 | seeded.get(device_id, set())
             )
-            candidates = [key for key in restore_keys if key in SENSOR_TYPES]
+            candidates = [key for key in restore_keys if is_sensor_key(key)]
         else:
             candidates = [
                 key for key, value in data.items()
-                if key in SENSOR_TYPES and value is not None
+                if is_sensor_key(key) and value is not None
             ]
         known = created.setdefault(device_id, set())
         new_entities = []
@@ -149,7 +176,7 @@ async def async_setup_entry(
             if key in known:
                 continue
             known.add(key)
-            entity = EZVIZSensor(device_id, key, SENSOR_TYPES[key], device_manager)
+            entity = EZVIZSensor(device_id, key, sensor_config_for_key(key), device_manager)
             if data is not None:
                 entity.apply_initial(data)
                 hass.async_create_task(

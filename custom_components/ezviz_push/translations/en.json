@@ -35,6 +35,10 @@
       "sd_capacity": { "name": "SD Capacity" },
       "charging_status": { "name": "Charging Status" },
       "alarm_time": { "name": "Alarm Time" },
+      "alarm_time_smartfacedet": { "name": "Face Detection Time" },
+      "alarm_time_loiterdetection": { "name": "Loitering Detection Time" },
+      "alarm_time_intelligentdetection": { "name": "Intelligent Detection Time" },
+      "alarm_time_pir": { "name": "PIR Time" },
       "calling_time": { "name": "Calling Time" },
       "calling_action": { "name": "Calling Action" },
       "face_id": { "name": "Face ID" },
@@ -50,8 +54,11 @@
       "detection_enabled": { "name": "Detection Enabled" }
     },
     "camera": {
-      "alarm_picture": { "name": "Alarm Picture" },
-      "calling_picture": { "name": "Calling Picture" }
+      "calling_picture": { "name": "Calling Picture" },
+      "alarm_picture_smartfacedet": { "name": "Face Detection Picture" },
+      "alarm_picture_loiterdetection": { "name": "Loitering Detection Picture" },
+      "alarm_picture_intelligentdetection": { "name": "Intelligent Detection Picture" },
+      "alarm_picture_pir": { "name": "PIR Picture" }
     }
   }
 }

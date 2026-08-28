@@ -9,22 +9,45 @@ from homeassistant.components.camera import Camera
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL
-from .entity_registry import prune_stale_entities, split_unique_id
+from .entity_registry import prune_stale_entities
 from .image_handler import ImageHandler
 from .webhook import SIGNAL_DATA_RECEIVED, SIGNAL_DEVICE_NEW
 
 _LOGGER = logging.getLogger(__name__)
 
-# entity key → extracted-data key carrying the picture URL
-CAMERA_URL_KEYS = {
-    "alarm_picture": "alarm_picture_url",
-    "calling_picture": "calling_picture_url",
-}
+# Static camera: calling cover picture. Alarm pictures are dynamic, one
+# entity per alarm type; localized names live in translations/<lang>.json
+# under entity.camera.<key>. Unknown types fall back to the raw key.
+CALLING_CAMERA_KEY = "calling_picture"
+ALARM_PICTURE_PREFIX = "alarm_picture_"
+
+
+def url_key_for_camera_key(camera_key: str) -> Optional[str]:
+    """Map an entity key to the extracted-data key carrying its picture URL."""
+    if camera_key == CALLING_CAMERA_KEY:
+        return "calling_picture_url"
+    if camera_key.startswith(ALARM_PICTURE_PREFIX):
+        return f"alarm_picture_url_{camera_key[len(ALARM_PICTURE_PREFIX):]}"
+    return None
+
+
+def camera_key_for_url_key(url_key: str) -> Optional[str]:
+    """Map an extracted-data URL key to its entity key (or None)."""
+    if url_key == "calling_picture_url":
+        return CALLING_CAMERA_KEY
+    if url_key.startswith("alarm_picture_url_"):
+        return ALARM_PICTURE_PREFIX + url_key[len("alarm_picture_url_"):]
+    return None
+
+
+def is_camera_key(key: str) -> bool:
+    return key == CALLING_CAMERA_KEY or key.startswith(ALARM_PICTURE_PREFIX)
 
 
 def _image_dir(hass: HomeAssistant) -> str:
@@ -63,17 +86,41 @@ async def async_setup_entry(
         {
             f"{device_id}_{key}"
             for device_id in device_manager.get_all_devices()
-            for key in CAMERA_URL_KEYS
-            if key in device_manager.get_entity_keys(device_id)
+            for key in device_manager.get_entity_keys(device_id)
+            if is_camera_key(key)
         },
         keep_check=_keep_if_image_on_disk,
     )
     for unique_id in kept:
-        device_id, key = split_unique_id(unique_id, set(CAMERA_URL_KEYS))
-        if device_id is None:
+        for device_id in device_manager.get_all_devices():
+            prefix = f"{device_id}_"
+            if not unique_id.startswith(prefix):
+                continue
+            key = unique_id[len(prefix):]
+            if not is_camera_key(key):
+                continue
+            seeded.setdefault(device_id, set()).add(key)
+            hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
+            break
+
+    # Drop the legacy generic alarm_picture entity: pictures are now stored
+    # per alarm type and must not overwrite each other.
+    legacy_registry = er.async_get(hass)
+    for entry in er.async_entries_for_config_entry(
+        legacy_registry, config_entry.entry_id
+    ):
+        if entry.domain != Platform.CAMERA:
             continue
-        seeded.setdefault(device_id, set()).add(key)
-        hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
+        if not entry.unique_id.endswith("_alarm_picture"):
+            continue
+        _LOGGER.debug("Removing legacy generic alarm picture entity %s", entry.entity_id)
+        legacy_registry.async_remove(entry.entity_id)
+        legacy_path = hass.config.path("ezviz_push_images", f"{entry.unique_id}.jpg")
+        if os.path.exists(legacy_path):
+            try:
+                os.remove(legacy_path)
+            except OSError as err:
+                _LOGGER.warning("Failed to remove legacy image %s: %s", legacy_path, err)
 
     @callback
     def _add_missing(device_id: str, data: dict | None = None) -> None:
@@ -85,16 +132,16 @@ async def async_setup_entry(
                 | seeded.get(device_id, set())
             )
             candidates = {
-                key: CAMERA_URL_KEYS[key]
+                key: url_key
                 for key in restore_keys
-                if key in CAMERA_URL_KEYS
+                if (url_key := url_key_for_camera_key(key)) is not None
             }
         else:
-            candidates = {
-                key: url_key
-                for key, url_key in CAMERA_URL_KEYS.items()
-                if data.get(url_key)
-            }
+            candidates = {}
+            for url_key, value in data.items():
+                key = camera_key_for_url_key(url_key)
+                if key is not None and value:
+                    candidates[key] = url_key
         for key, url_key in candidates.items():
             if key in known:
                 continue
@@ -150,6 +197,8 @@ class EZVIZCamera(Camera):
         self._image_path = _image_path(hass, device_id, camera_key)
         self._attr_unique_id = f"{device_id}_{camera_key}"
         self._attr_has_entity_name = True
+        # Resolved at runtime from translations/<lang>.json; unknown alarm
+        # types fall back to the key itself.
         self._attr_translation_key = camera_key
         self._attr_should_poll = False
         self._attr_available = False

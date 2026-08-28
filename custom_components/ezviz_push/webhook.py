@@ -155,8 +155,16 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
 
         url = _safe_get(body, "pictureList", 0, "url")
         if url:
-            extracted["alarm_picture_url"] = url
-            _LOGGER.debug("Alarm picture URL: %s", url)
+            # One picture slot per alarm type so different alarms do not
+            # overwrite each other's image entity.
+            alarm_type_key = str(body.get("alarmType") or "alarm").lower()
+            extracted[f"alarm_picture_url_{alarm_type_key}"] = url
+            _LOGGER.debug("Alarm picture URL (%s): %s", alarm_type_key, url)
+
+        # Per-type trigger time alongside the generic last-alarm time.
+        extracted[f"alarm_time_{str(body.get('alarmType') or 'alarm').lower()}"] = (
+            parse_timestamp(body.get("alarmTime"))
+        )
 
         # SmartFaceDet carries a base64-encoded customInfo with the faceId (may be
         # empty when the face is not registered).

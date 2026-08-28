@@ -117,7 +117,8 @@
 | sensor | sd_health | SD卡健康度 |
 | sensor | sd_capacity | SD卡容量 |
 | sensor | charging_status | 充电状态 |
-| sensor | alarm_time | 报警时间 |
+| sensor | alarm_time | 报警时间（最近一次，任意类型） |
+| sensor | alarm_time_* | 各报警类型的触发时间独立实体（如 `alarm_time_loiterdetection` 徘徊检测、`alarm_time_smartfacedet` 人脸检测），互不覆盖 |
 | sensor | calling_time | 呼叫时间 |
 | sensor | calling_action | 呼叫动作（响铃/接听/挂断） |
 | sensor | face_id | 人脸识别（显示配置的人名/原始码，未识别时显示「未录入人脸」） |
@@ -129,5 +130,5 @@
 | binary_sensor | alarm | 报警触发（30秒自动复位） |
 | binary_sensor | armed | 布防状态 |
 | binary_sensor | detection_enabled | 移动检测开关 |
-| camera | alarm_picture | 报警图片 |
 | camera | calling_picture | 呼叫封面图片 |
+| camera | alarm_picture_* | 报警图片按报警类型独立实体（如 `alarm_picture_loiterdetection` 徘徊检测、`alarm_picture_smartfacedet` 人脸检测、`alarm_picture_intelligentdetection` 智能检测），互不覆盖，随首个该类型报警出现 |
