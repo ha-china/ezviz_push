@@ -116,8 +116,14 @@
 | sensor | wifi_signal | WiFi信号强度 |
 | sensor | sd_health | SD卡健康度 |
 | sensor | sd_capacity | SD卡容量 |
-| sensor | charging_status | 充电状态 |
-| sensor | alarm_time | 报警时间（最近一次，任意类型） |
+| sensor | sd_status | SD卡状态 |
+| sensor | sd_first_record_time | SD卡首次录像时间 |
+| sensor | screen_brightness | 屏幕亮度 |
+| sensor | energy_mode | 省电模式 |
+| sensor | microphone_volume | 麦克风音量 |
+| sensor | card_key_count | 门卡数量 |
+| sensor | charging_status | 充电状态（属性：power_status / power_value） |
+| sensor | alarm_time | 报警时间（最近一次，任意类型；属性：alarm_id、channel_name、custom_type、location、describe） |
 | sensor | alarm_time_* | 各报警类型的触发时间独立实体（如 `alarm_time_loiterdetection` 徘徊检测、`alarm_time_smartfacedet` 人脸检测），互不覆盖 |
 | sensor | calling_time | 呼叫时间 |
 | sensor | calling_action | 呼叫动作（响铃/接听/挂断） |
@@ -125,10 +131,13 @@
 | sensor | alarm_type | 报警类型 |
 | sensor | last_event | 最近事件 |
 | sensor | last_seen | 最后活动时间（时间戳） |
-| binary_sensor | online | 在线状态 |
+| binary_sensor | online | 在线状态（属性：nat_ip 设备公网 IP） |
 | binary_sensor | doorbell_ring | 呼叫按铃（30秒自动复位） |
 | binary_sensor | alarm | 报警触发（30秒自动复位） |
 | binary_sensor | armed | 布防状态 |
-| binary_sensor | detection_enabled | 移动检测开关 |
+| binary_sensor | detection_enabled | 移动检测开关（属性：detection_plan 布防计划表） |
+| binary_sensor | detection_enabled_* | 按检测类型独立开关：人形检测、人脸识别检测、徘徊检测、陌生人检测等（来自设备智能应用配置） |
+| binary_sensor | night_light_enabled | 夜灯开关 |
+| binary_sensor | mute_enabled | 静音开关 |
 | camera | calling_picture | 呼叫封面图片 |
 | camera | alarm_picture_* | 报警图片按报警类型独立实体（如 `alarm_picture_loiterdetection` 徘徊检测、`alarm_picture_smartfacedet` 人脸检测、`alarm_picture_intelligentdetection` 智能检测），互不覆盖，随首个该类型报警出现 |

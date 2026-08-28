@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_MODEL, MSG_TYPE_ALARM, MSG_TYPE_CALLING
-from .entity_registry import prune_stale_entities, split_unique_id
+from .entity_registry import prune_stale_entities
 from .webhook import SIGNAL_DATA_RECEIVED, SIGNAL_DEVICE_NEW
 
 
@@ -35,6 +35,26 @@ def _has_detection(data: dict) -> bool:
     return data.get("detection_enabled") is not None
 
 
+def _has_night_light(data: dict) -> bool:
+    return isinstance(data.get("night_light_enabled"), bool)
+
+
+def _has_mute(data: dict) -> bool:
+    return isinstance(data.get("mute_enabled"), bool)
+
+
+DYNAMIC_DETECTION_PREFIX = "detection_enabled_"
+
+
+def is_dynamic_binary_key(key: str) -> bool:
+    """Per-detection-type switches, e.g. detection_enabled_loitering."""
+    return key.startswith(DYNAMIC_DETECTION_PREFIX)
+
+
+def is_lazy_binary_key(key: str) -> bool:
+    return key in LAZY_BINARY_SENSORS or is_dynamic_binary_key(key)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -45,24 +65,27 @@ async def async_setup_entry(
     # Keys re-seeded from registry entries kept during cleanup below.
     seeded: dict[str, set[str]] = {}
 
-    lazy_keys = set(LAZY_BINARY_SENSORS)
-    kept = prune_stale_entities(
-        hass,
+    kept = prune_stale_entities(        hass,
         config_entry,
         Platform.BINARY_SENSOR,
         {
             f"{device_id}_{key}"
             for device_id in device_manager.get_all_devices()
-            for key in {"online"} | lazy_keys
-            if key == "online" or key in device_manager.get_entity_keys(device_id)
+            for key in device_manager.get_entity_keys(device_id)
+            if key == "online" or is_lazy_binary_key(key)
         },
     )
     for unique_id in kept:
-        device_id, key = split_unique_id(unique_id, {"online"} | lazy_keys)
-        if device_id is None or key == "online":
-            continue
-        seeded.setdefault(device_id, set()).add(key)
-        hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
+        for device_id in device_manager.get_all_devices():
+            prefix = f"{device_id}_"
+            if not unique_id.startswith(prefix):
+                continue
+            key = unique_id[len(prefix):]
+            if key == "online" or not is_lazy_binary_key(key):
+                continue
+            seeded.setdefault(device_id, set()).add(key)
+            hass.async_create_task(device_manager.async_add_entity_key(device_id, key))
+            break
 
     @callback
     def _add_missing(device_id: str, data: dict | None = None) -> None:
@@ -79,19 +102,26 @@ async def async_setup_entry(
             candidates = [
                 (key, None)
                 for key in restore_keys
-                if key in LAZY_BINARY_SENSORS
+                if is_lazy_binary_key(key)
             ]
         else:
             candidates = [
                 (key, check) for key, (check, _factory) in LAZY_BINARY_SENSORS.items()
                 if check(data)
             ]
-        for key, check in candidates:
+            candidates += [
+                (key, None)
+                for key in data
+                if is_dynamic_binary_key(key) and data.get(key) is not None
+            ]
+        for key, _check in candidates:
             if key in known:
                 continue
             known.add(key)
-            factory = LAZY_BINARY_SENSORS[key][1]
-            entity = factory(device_id, device_manager)
+            if key in LAZY_BINARY_SENSORS:
+                entity = LAZY_BINARY_SENSORS[key][1](device_id, device_manager)
+            else:
+                entity = EZVIZDetectionTypeBinarySensor(device_id, key, device_manager)
             if data is not None:
                 entity.apply_initial(data)
                 hass.async_create_task(
@@ -141,6 +171,7 @@ class _EZVIZBinarySensor(RestoreEntity, BinarySensorEntity):
         self._attr_device_class = device_class
         self._attr_available = False
         self._attr_is_on = False
+        self._attr_extra_state_attributes = {}
         self._timer = None
         # Set True when created from live data so the auto-reset timer starts
         # once the entity is actually added to hass.
@@ -220,6 +251,8 @@ class EZVIZOnlineBinarySensor(_EZVIZBinarySensor):
         if "online" in data:
             self._attr_is_on = bool(data["online"])
             self._attr_available = True
+            if data.get("nat_ip"):
+                self._attr_extra_state_attributes["nat_ip"] = data["nat_ip"]
             self.async_write_ha_state()
 
 
@@ -308,9 +341,71 @@ class EZVIZDetectionBinarySensor(_EZVIZBinarySensor):
         self._init(device_id, "detection_enabled", device_manager, BinarySensorDeviceClass.RUNNING)
 
     def apply_initial(self, data: dict) -> bool:
+        if data.get("detection_plan") is not None:
+            self._attr_extra_state_attributes["detection_plan"] = data["detection_plan"]
         if not _has_detection(data):
             return False
         self._attr_is_on = bool(data["detection_enabled"])
+        self._attr_available = True
+        self._mark_initial_applied()
+        return True
+
+    @callback
+    def _handle_data(self, data: dict) -> None:
+        if self.apply_initial(data):
+            self.async_write_ha_state()
+
+
+class EZVIZNightLightBinarySensor(_EZVIZBinarySensor):
+    """夜灯开关 (NightLightEnable)"""
+
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "night_light_enabled", device_manager, BinarySensorDeviceClass.LIGHT)
+
+    def apply_initial(self, data: dict) -> bool:
+        if not _has_night_light(data):
+            return False
+        self._attr_is_on = data["night_light_enabled"]
+        self._attr_available = True
+        self._mark_initial_applied()
+        return True
+
+    @callback
+    def _handle_data(self, data: dict) -> None:
+        if self.apply_initial(data):
+            self.async_write_ha_state()
+
+
+class EZVIZMuteBinarySensor(_EZVIZBinarySensor):
+    """静音开关 (MuteEnabled)"""
+
+    def __init__(self, device_id: str, device_manager) -> None:
+        self._init(device_id, "mute_enabled", device_manager, BinarySensorDeviceClass.SOUND)
+
+    def apply_initial(self, data: dict) -> bool:
+        if not _has_mute(data):
+            return False
+        self._attr_is_on = data["mute_enabled"]
+        self._attr_available = True
+        self._mark_initial_applied()
+        return True
+
+    @callback
+    def _handle_data(self, data: dict) -> None:
+        if self.apply_initial(data):
+            self.async_write_ha_state()
+
+
+class EZVIZDetectionTypeBinarySensor(_EZVIZBinarySensor):
+    """按检测类型独立的开关（detection_enabled_<type>，来自设备智能应用配置）"""
+
+    def __init__(self, device_id: str, key: str, device_manager) -> None:
+        self._init(device_id, key, device_manager, BinarySensorDeviceClass.RUNNING)
+
+    def apply_initial(self, data: dict) -> bool:
+        if self._key not in data or data[self._key] is None:
+            return False
+        self._attr_is_on = bool(data[self._key])
         self._attr_available = True
         self._mark_initial_applied()
         return True
@@ -327,4 +422,6 @@ LAZY_BINARY_SENSORS: dict[str, tuple] = {
     "alarm": (_evt_alarm, EZVIZAlarmBinarySensor),
     "armed": (_has_armed, EZVIZArmedBinarySensor),
     "detection_enabled": (_has_detection, EZVIZDetectionBinarySensor),
+    "night_light_enabled": (_has_night_light, EZVIZNightLightBinarySensor),
+    "mute_enabled": (_has_mute, EZVIZMuteBinarySensor),
 }

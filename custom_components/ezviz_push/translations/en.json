@@ -33,6 +33,12 @@
       "wifi_signal": { "name": "WiFi Signal" },
       "sd_health": { "name": "SD Health" },
       "sd_capacity": { "name": "SD Capacity" },
+      "sd_status": { "name": "SD Card Status" },
+      "sd_first_record_time": { "name": "SD First Record Time" },
+      "screen_brightness": { "name": "Screen Brightness" },
+      "energy_mode": { "name": "Energy Mode" },
+      "microphone_volume": { "name": "Microphone Volume" },
+      "card_key_count": { "name": "Card Key Count" },
       "charging_status": { "name": "Charging Status" },
       "alarm_time": { "name": "Alarm Time" },
       "alarm_time_smartfacedet": { "name": "Face Detection Time" },
@@ -51,7 +57,14 @@
       "doorbell_ring": { "name": "Doorbell Ring" },
       "alarm": { "name": "Alarm" },
       "armed": { "name": "Armed" },
-      "detection_enabled": { "name": "Detection Enabled" }
+      "detection_enabled": { "name": "Detection Enabled" },
+      "night_light_enabled": { "name": "Night Light" },
+      "mute_enabled": { "name": "Mute" },
+      "detection_enabled_human_detect": { "name": "Human Detection" },
+      "detection_enabled_face_recognize": { "name": "Face Recognition Detection" },
+      "detection_enabled_loitering_detect": { "name": "Loitering Detection (App)" },
+      "detection_enabled_loitering": { "name": "Loitering Detection" },
+      "detection_enabled_stranger": { "name": "Stranger Detection" }
     },
     "camera": {
       "calling_picture": { "name": "Calling Picture" },

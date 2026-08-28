@@ -33,6 +33,12 @@
       "wifi_signal": { "name": "WiFi 信号" },
       "sd_health": { "name": "SD 卡健康度" },
       "sd_capacity": { "name": "SD 卡容量" },
+      "sd_status": { "name": "SD 卡状态" },
+      "sd_first_record_time": { "name": "SD 卡首次录像时间" },
+      "screen_brightness": { "name": "屏幕亮度" },
+      "energy_mode": { "name": "省电模式" },
+      "microphone_volume": { "name": "麦克风音量" },
+      "card_key_count": { "name": "门卡数量" },
       "charging_status": { "name": "充电状态" },
       "alarm_time": { "name": "报警时间" },
       "alarm_time_smartfacedet": { "name": "人脸检测时间" },
@@ -51,7 +57,14 @@
       "doorbell_ring": { "name": "呼叫按铃" },
       "alarm": { "name": "报警" },
       "armed": { "name": "布防" },
-      "detection_enabled": { "name": "移动检测" }
+      "detection_enabled": { "name": "移动检测" },
+      "night_light_enabled": { "name": "夜灯" },
+      "mute_enabled": { "name": "静音" },
+      "detection_enabled_human_detect": { "name": "人形检测" },
+      "detection_enabled_face_recognize": { "name": "人脸识别检测" },
+      "detection_enabled_loitering_detect": { "name": "徘徊检测（App）" },
+      "detection_enabled_loitering": { "name": "徘徊检测" },
+      "detection_enabled_stranger": { "name": "陌生人检测" }
     },
     "camera": {
       "calling_picture": { "name": "呼叫图片" },

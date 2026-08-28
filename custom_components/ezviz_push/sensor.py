@@ -46,6 +46,42 @@ SENSOR_TYPES = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfInformation.MEGABYTES,
     },
+    "sd_status": {
+        "icon": "mdi:sd",
+        "device_class": None,
+        "state_class": None,
+        "unit": None,
+    },
+    "sd_first_record_time": {
+        "icon": "mdi:movie-open",
+        "device_class": SensorDeviceClass.TIMESTAMP,
+        "state_class": None,
+        "unit": None,
+    },
+    "screen_brightness": {
+        "icon": "mdi:brightness-6",
+        "device_class": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": None,
+    },
+    "energy_mode": {
+        "icon": "mdi:leaf",
+        "device_class": None,
+        "state_class": None,
+        "unit": None,
+    },
+    "microphone_volume": {
+        "icon": "mdi:microphone",
+        "device_class": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": PERCENTAGE,
+    },
+    "card_key_count": {
+        "icon": "mdi:card-multiple-outline",
+        "device_class": None,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": None,
+    },
     "charging_status": {
         "icon": "mdi:battery-charging",
         "device_class": None,
@@ -117,6 +153,23 @@ def sensor_config_for_key(key: str) -> dict | None:
 
 def is_sensor_key(key: str) -> bool:
     return sensor_config_for_key(key) is not None
+
+
+# Supplementary fields kept as entity attributes, refreshed whenever the
+# entity's main value updates from the same message.
+SENSOR_ATTRIBUTE_KEYS: dict[str, dict[str, str]] = {
+    "alarm_time": {
+        "alarm_id": "alarm_id",
+        "channel_name": "channel_name",
+        "custom_type": "custom_type",
+        "location": "location",
+        "describe": "describe",
+    },
+    "charging_status": {
+        "power_status": "power_status",
+        "power_value": "power_value",
+    },
+}
 
 
 async def async_setup_entry(
@@ -222,6 +275,9 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
         self._attr_available = False
         self._attr_native_value = None
         self._attr_extra_state_attributes = {}
+        self._attribute_keys = dict(SENSOR_ATTRIBUTE_KEYS.get(sensor_key, {}))
+        if is_alarm_time_key(sensor_key):
+            self._attribute_keys.update(SENSOR_ATTRIBUTE_KEYS["alarm_time"])
         # True when the entity was created carrying fresh data from its very
         # first message; restore must not overwrite it with older values.
         self._has_initial_value = False
@@ -287,6 +343,9 @@ class EZVIZSensor(RestoreEntity, SensorEntity):
         if self._sensor_key not in data:
             return False
         value = data[self._sensor_key]
+        for attr, data_key in self._attribute_keys.items():
+            if data.get(data_key) is not None:
+                self._attr_extra_state_attributes[attr] = data[data_key]
         if value is None:
             return False
         if self._config["device_class"] == SensorDeviceClass.TIMESTAMP and isinstance(value, str):

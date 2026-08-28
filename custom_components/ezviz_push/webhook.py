@@ -121,12 +121,11 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
     extracted["last_seen"] = datetime.now().astimezone().isoformat()
     extracted["online"] = True
 
-    if message_type == MSG_TYPE_DEVICE_STATUS or message_type == MSG_TYPE_SHADOW_CHANGE:
-        # ys.devicestatus / ys.shadow.change - reported is a list of status items
+    if message_type == MSG_TYPE_DEVICE_STATUS:
+        # ys.devicestatus - reported is a list (or dict) of status items,
+        # with body.type telling which sub-report it is.
         raw_reported = body.get("reported") if isinstance(body, dict) else None
-
-        # Collect all known fields from all items in the reported list
-        merged = {}
+        merged: Dict[str, Any] = {}
         if isinstance(raw_reported, list):
             for item in raw_reported:
                 if isinstance(item, dict):
@@ -134,24 +133,83 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(raw_reported, dict):
             merged.update(raw_reported)
 
-        if message_type == MSG_TYPE_SHADOW_CHANGE and merged:
-            _LOGGER.debug("Shadow change fields: %s", list(merged.keys()))
+        if "Enable" in merged:
+            extracted["detection_enabled"] = merged.get("Enable")
+        if "Date" in merged:
+            # Detection schedule (weekday/plan table) -> attribute
+            extracted["detection_plan"] = merged.get("Date")
+
+        body_type = body.get("type")
+        # Only DEFENCE bodies carry the armed status; other devicestatus
+        # sub-types (e.g. storage_status) also have a "status" field that
+        # must not pollute the armed state.
+        if body_type == "DEFENCE" and "status" in merged:
+            extracted["armed"] = merged.get("status")
+        elif body_type == "storage_status":
+            extracted["sd_status"] = merged.get("status")
+            extracted["sd_first_record_time"] = parse_timestamp(
+                merged.get("firstRecordTime")
+            )
+        elif body_type == "power_status":
+            if "powerStatus" in merged:
+                extracted["power_status"] = merged.get("powerStatus")
+            if "powerValue" in merged:
+                extracted["power_value"] = merged.get("powerValue")
 
         extracted["battery_level"] = _to_float(merged.get("powerRemaining"))
         extracted["wifi_signal"] = _to_float(merged.get("signal"))
         extracted["sd_health"] = _to_float(merged.get("healthLevel"))
         extracted["sd_capacity"] = _to_float(merged.get("capacity"))
         extracted["charging_status"] = parse_power_type(merged.get("powerType"))
-        if "status" in merged:
-            extracted["armed"] = merged.get("status")
-        if "Enable" in merged:
-            extracted["detection_enabled"] = merged.get("Enable")
+
+    elif message_type == MSG_TYPE_SHADOW_CHANGE:
+        # ys.shadow.change - one attribute per message, value in statusValue.
+        attribute = body.get("attribute") if isinstance(body, dict) else None
+        status_value = body.get("statusValue") if isinstance(body, dict) else None
+
+        if attribute == "DownloadedAPP" and isinstance(status_value, dict):
+            # Downloaded intelligent APP list with per-detection switches,
+            # e.g. APPID "app_human_detect$:$NTY50".
+            for app in status_value.get("APP") or []:
+                if not isinstance(app, dict):
+                    continue
+                app_id = str(app.get("APPID", "")).split("$", 1)[0]
+                name = app_id[len("app_"):] if app_id.startswith("app_") else app_id
+                if name:
+                    extracted[f"detection_enabled_{name}"] = bool(app.get("enabled"))
+        elif attribute == "LoiteringEnable" and isinstance(status_value, dict):
+            extracted["detection_enabled_loitering"] = bool(status_value.get("enable"))
+        elif attribute == "StrangerDetectionCfg" and isinstance(status_value, dict):
+            enable = _safe_get(
+                status_value, "faceContrastList", 0, "faceContrast", "enable"
+            )
+            if enable is not None:
+                extracted["detection_enabled_stranger"] = bool(enable)
+        elif attribute == "NightLightEnable" and isinstance(status_value, bool):
+            extracted["night_light_enabled"] = status_value
+        elif attribute == "MuteEnabled" and isinstance(status_value, bool):
+            extracted["mute_enabled"] = status_value
+        elif attribute == "BrithtnessCfg" and isinstance(status_value, dict):
+            extracted["screen_brightness"] = _to_float(status_value.get("brightness"))
+        elif attribute == "EnergyModeCfg" and isinstance(status_value, dict):
+            mode = status_value.get("energyMode")
+            if mode:
+                extracted["energy_mode"] = str(mode)
+        elif attribute == "MicrophoneVolume":
+            extracted["microphone_volume"] = _to_float(status_value)
+        elif attribute == "CardKeyInfo" and isinstance(status_value, dict):
+            extracted["card_key_count"] = _to_float(status_value.get("totalKeyNum"))
 
     elif message_type == MSG_TYPE_ALARM:
         # ys.alarm
         extracted["alarm_time"] = parse_timestamp(body.get("alarmTime"))
         extracted["alarm_type"] = body.get("alarmType")
         extracted["channel_name"] = body.get("channelName")
+        # Supplementary fields kept as entity attributes
+        extracted["alarm_id"] = body.get("alarmId")
+        extracted["custom_type"] = body.get("customType")
+        extracted["location"] = body.get("location")
+        extracted["describe"] = body.get("describe")
 
         url = _safe_get(body, "pictureList", 0, "url")
         if url:
@@ -202,6 +260,7 @@ def extract_data(message_type: str, body: Dict[str, Any]) -> Dict[str, Any]:
         extracted["online"] = msg_type == "ONLINE"
         extracted["device_name"] = body.get("deviceName")
         extracted["device_type"] = body.get("devType")
+        extracted["nat_ip"] = body.get("natIp")
 
     else:
         _LOGGER.debug("Unhandled message type: %s", message_type)
