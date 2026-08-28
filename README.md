@@ -140,5 +140,5 @@
 | binary_sensor | detection_enabled_* | 按检测类型独立开关：人形检测、人脸识别检测、徘徊检测、陌生人检测等（来自设备智能应用配置） |
 | binary_sensor | night_light_enabled | 夜灯开关 |
 | binary_sensor | mute_enabled | 静音开关 |
-| camera | calling_picture | 呼叫封面图片 |
-| camera | alarm_picture_* | 报警图片按报警类型独立实体（如 `alarm_picture_loiterdetection` 徘徊检测、`alarm_picture_smartfacedet` 人脸检测、`alarm_picture_intelligentdetection` 智能检测），互不覆盖，随首个该类型报警出现 |
+| camera | calling_picture | 呼叫封面图片（1 个） |
+| camera | alarm_picture_* | 报警图片按报警类型独立实体，每种出现过报警的类型各 1 个（如 `alarm_picture_loiterdetection` 徘徊检测、`alarm_picture_smartfacedet` 人脸检测、`alarm_picture_intelligentdetection` 智能检测），互不覆盖，数量随类型增长；未知类型回退显示编码名 |
